@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Cipher — Chat. Simple. Premium.</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=Jost:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="style.css"/>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════
+     LANDING PAGE
+═══════════════════════════════════════════════════════ -->
+<div class="page active" id="page-landing">
+
+  <nav class="l-nav">
+    <div class="l-logo">Cipher<span>.</span></div>
+    <div class="l-nav-links">
+      <button class="btn btn-ghost btn-sm" id="nav-login" onclick="openModal('login')">Sign In</button>
+      <button class="btn btn-ink btn-sm" id="nav-signup" onclick="openModal('signup')">Get Started</button>
+      <button class="btn btn-ink btn-sm hidden" id="nav-dashboard" onclick="showPage('page-search')">Dashboard</button>
+    </div>
+  </nav>
+
+  <section class="l-hero">
+    <div class="l-eyebrow">Introducing Cipher</div>
+    <h1 class="l-headline">Chat.<br/><em>Simply.</em><br/>Beautifully.</h1>
+    <p class="l-tagline">Conversations deserve better than noise.</p>
+    <div class="l-cta" id="hero-guest-cta">
+      <button class="btn btn-ink btn-lg" onclick="openModal('signup')">Create Free Account</button>
+      <button class="btn btn-ghost btn-lg" onclick="openModal('login')">Sign In</button>
+    </div>
+    <div class="l-cta hidden" id="hero-authed-cta">
+      <button class="btn btn-ink btn-lg" onclick="showPage('page-search')">Open Dashboard</button>
+      <button class="btn btn-ghost btn-lg" onclick="showPage('page-chat')">Open Chats</button>
+    </div>
+    <button class="btn btn-ghost btn-sm l-mobile-signout hidden" id="landing-signout" onclick="logout()">Sign Out</button>
+  </section>
+
+  <section class="l-features">
+    <div class="l-feat">
+      <div class="l-feat-num">01</div>
+      <div class="l-feat-title">Real-time</div>
+      <div class="l-feat-desc">Messages arrive the instant they're sent. No refresh. No delay. Conversations flow as they should.</div>
+    </div>
+    <div class="l-feat">
+      <div class="l-feat-num">02</div>
+      <div class="l-feat-title">Effortless Search</div>
+      <div class="l-feat-desc">Find anyone by username in seconds. Clean results. Zero friction between you and the people you want to reach.</div>
+    </div>
+    <div class="l-feat">
+      <div class="l-feat-num">03</div>
+      <div class="l-feat-title">Secure</div>
+      <div class="l-feat-desc">Passwords hashed. Sessions tokenised. Your conversations remain private. Always.</div>
+    </div>
+  </section>
+
+  <section class="l-manifesto">
+    <p class="l-manifesto-text">
+      Most chat apps demand your attention.<br/>
+      Cipher just <strong>carries your words.</strong>
+    </p>
+  </section>
+
+  <footer class="l-footer">
+    <span>© 2025 Cipher</span>
+    <span>Built with Node.js · MongoDB · Socket.io</span>
+  </footer>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════
+     SEARCH PAGE
+═══════════════════════════════════════════════════════ -->
+<div class="page" id="page-search">
+
+  <header class="s-topbar">
+    <div class="s-logo">Cipher<span>.</span></div>
+    <div class="s-topbar-right">
+      <button class="btn btn-ghost btn-sm" onclick="showPage('page-chat')">💬 Messages</button>
+      <div class="s-user-chip">
+        <div class="avatar avatar-sm" id="s-avatar">AL</div>
+        <span id="s-username">@alice</span>
+      </div>
+      <button class="btn btn-ghost btn-sm" onclick="logout()">Sign Out</button>
+    </div>
+  </header>
+
+  <main class="s-main">
+    <h1 class="s-heading">Find people.</h1>
+    <p class="s-sub">Search by username to start a conversation.</p>
+
+    <div class="s-search-bar">
+      <span class="s-search-icon">⌕</span>
+      <input class="s-input" id="s-input" type="text" placeholder="Type a username…" autocomplete="off" autofocus/>
+      <button class="s-search-btn" onclick="doSearch()">Search</button>
+    </div>
+
+    <div class="s-results-label hidden" id="s-label"></div>
+    <div id="s-results"></div>
+
+    <div class="s-empty" id="s-empty">
+      <div class="s-empty-icon">◌</div>
+      <div class="s-empty-text">Search for someone to begin.</div>
+    </div>
+  </main>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════
+     CHAT PAGE
+═══════════════════════════════════════════════════════ -->
+<div class="page" id="page-chat">
+
+  <!-- Sidebar -->
+  <aside class="c-sidebar">
+    <div class="c-sidebar-head">
+      <span class="c-logo">Cipher<span>.</span></span>
+      <div class="c-sidebar-actions">
+        <button class="icon-btn" onclick="showPage('page-search')" title="Find people">⌕</button>
+        <button class="icon-btn" onclick="showPage('page-landing')" title="Back">⟵</button>
+      </div>
+    </div>
+
+    <div class="c-sidebar-search">
+      <div class="c-search-wrap">
+        <span>⌕</span>
+        <input class="c-search-input" id="c-filter" type="text" placeholder="Filter…" oninput="filterConvs()"/>
+      </div>
+    </div>
+
+    <div class="c-section-label">Messages</div>
+    <div class="c-conv-list" id="c-conv-list"></div>
+
+    <div class="c-sidebar-footer">
+      <div class="avatar" id="c-my-avatar">AL</div>
+      <div class="c-me-info">
+        <div class="c-me-name" id="c-my-name">@alice</div>
+        <div class="c-me-status"><span class="online-dot"></span>Online</div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Main -->
+  <main class="c-main">
+
+    <!-- Empty state -->
+    <div class="c-empty" id="c-empty">
+      <div class="c-empty-ornament">❝</div>
+      <h2 class="c-empty-title">Select a conversation</h2>
+      <p class="c-empty-sub">Choose from the sidebar or <a style="color:var(--accent);cursor:pointer" onclick="showPage('page-search')">find someone new.</a></p>
+    </div>
+
+    <!-- Active panel -->
+    <div class="c-panel" id="c-panel">
+
+      <div class="c-head">
+        <button class="icon-btn c-back-btn" onclick="showConversationList()" title="Back">⟵</button>
+        <div class="avatar avatar-lg" id="c-head-avatar">BO</div>
+        <div class="c-head-info">
+          <div class="c-head-name" id="c-head-name">@bob</div>
+          <div class="c-head-status online" id="c-head-status">
+            <span class="online-dot"></span> Online
+          </div>
+        </div>
+      </div>
+
+      <div class="c-msgs" id="c-msgs"></div>
+
+      <div class="c-input-bar">
+      <div class="c-input-wrap">
+        <label class="c-file-btn" title="Attach file">
+          <input type="file" id="c-file" hidden />
+          <span>+</span>
+        </label>
+        <textarea class="c-textarea" id="c-textarea" rows="1" placeholder="Write a message…" maxlength="2000"></textarea>
+        <button class="c-send" id="c-send" disabled onclick="sendMsg()" title="Send (Enter)">➤</button>
+      </div>
+      </div>
+
+    </div>
+  </main>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════
+     AUTH MODAL
+═══════════════════════════════════════════════════════ -->
+<div class="modal-backdrop" id="modal-backdrop" onclick="handleBackdropClick(event)">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal()">✕</button>
+
+    <div class="modal-tabs">
+      <div class="modal-tab active" id="tab-login" onclick="switchTab('login')">Sign In</div>
+      <div class="modal-tab" id="tab-signup" onclick="switchTab('signup')">Create Account</div>
+    </div>
+
+    <!-- Login -->
+    <div id="form-login">
+      <div class="modal-eyebrow">Welcome back</div>
+      <h2 class="modal-title">Sign in.</h2>
+      <div class="form-group">
+        <label class="form-label">Email</label>
+        <input class="form-input" id="l-email" type="email" placeholder="you@example.com"/>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Password</label>
+        <input class="form-input" id="l-pass" type="password" placeholder="••••••••" onkeydown="if(event.key==='Enter')submitLogin()"/>
+      </div>
+      <div class="form-err hidden" id="l-err"></div>
+      <button class="btn btn-ink w-full" style="margin-top:6px" onclick="submitLogin()" id="l-btn">Sign In</button>
+      <div class="modal-switch">No account? <a onclick="switchTab('signup')">Create one</a></div>
+    </div>
+
+    <!-- Signup -->
+    <div id="form-signup" class="hidden">
+      <div class="modal-eyebrow">Get started</div>
+      <h2 class="modal-title">Create account.</h2>
+      <div class="form-group">
+        <label class="form-label">Username</label>
+        <input class="form-input" id="s-uname" type="text" placeholder="yourname" maxlength="20"/>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Email</label>
+        <input class="form-input" id="s-email" type="email" placeholder="you@example.com"/>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Password</label>
+        <input class="form-input" id="s-pass" type="password" placeholder="Min. 6 characters" onkeydown="if(event.key==='Enter')submitSignup()"/>
+      </div>
+      <div class="form-err hidden" id="s-err"></div>
+      <button class="btn btn-ink w-full" style="margin-top:6px" onclick="submitSignup()" id="s-btn">Create Account</button>
+      <div class="modal-switch">Already have one? <a onclick="switchTab('login')">Sign in</a></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════
+     JAVASCRIPT
+═══════════════════════════════════════════════════════ -->
+<script src="http://127.0.0.1:5000/socket.io/socket.io.js"></script>
+<script src="script.js"></script>
+</body>
+</html>
