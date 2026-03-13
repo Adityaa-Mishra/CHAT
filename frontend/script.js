@@ -1,6 +1,6 @@
 // API configuration deployed on render
 const API_BASE =
-  window.location.hostname === "localhost"
+  (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1")
     ? "http://127.0.0.1:5000"
     : "https://chat-7jt6.onrender.com";
 
@@ -79,6 +79,7 @@ async function submitLogin(){
   try{
     const data = await api('/api/auth/login', { method:'POST', body: JSON.stringify({ email, password: pass }) });
     localStorage.setItem('cipher_token', data.token);
+    localStorage.setItem('cipher_user', JSON.stringify(data.user));
     currentUser = data.user;
     hydrateUserMap([data.user]);
     closeModal();
@@ -108,6 +109,7 @@ async function submitSignup(){
   try{
     const data = await api('/api/auth/signup', { method:'POST', body: JSON.stringify({ username: uname, email, password: pass }) });
     localStorage.setItem('cipher_token', data.token);
+    localStorage.setItem('cipher_user', JSON.stringify(data.user));
     currentUser = data.user;
     hydrateUserMap([data.user]);
     closeModal();
@@ -123,6 +125,7 @@ async function submitSignup(){
 
 function logout(){
   localStorage.removeItem('cipher_token');
+  localStorage.removeItem('cipher_user');
   if(socket){ socket.disconnect(); socket = null; }
   currentUser = null;
   activeConvId = null;
@@ -168,8 +171,21 @@ async function loadMe(){
     hydrateUserMap([data.user]);
     await bootstrapApp();
     return true;
-  }catch(_){
-    localStorage.removeItem('cipher_token');
+  }catch(err){
+    if(err.status === 401){
+      localStorage.removeItem('cipher_token');
+      localStorage.removeItem('cipher_user');
+      return false;
+    }
+    const cached = localStorage.getItem('cipher_user');
+    if(cached){
+      try{
+        currentUser = JSON.parse(cached);
+        hydrateUserMap([currentUser]);
+        await bootstrapApp();
+        return true;
+      }catch(_){ /* ignore */ }
+    }
     return false;
   }
 }
@@ -583,13 +599,15 @@ function filterConvs(){
 // Socket
 function connectSocket(){
   if(socket || !getToken()) return;
-  socket = io(API_BASE, { auth: { token: getToken() } });
+  ensureSocketIO().then(() => {
+    if(socket) return;
+    socket = io(API_BASE, { auth: { token: getToken() } });
 
-  socket.on('connect', () => {
-    if(activeConvId){ joinConversationRoom(activeConvId); }
-  });
+    socket.on('connect', () => {
+      if(activeConvId){ joinConversationRoom(activeConvId); }
+    });
 
-  socket.on('presence:update', (payload) => {
+    socket.on('presence:update', (payload) => {
     const user = userMap[payload.userId] || { _id: payload.userId };
     user.online = payload.online;
     user.lastSeen = payload.lastSeen;
@@ -673,7 +691,7 @@ function connectSocket(){
     }
   });
 
-  socket.on('message:deleted', (payload) => {
+    socket.on('message:deleted', (payload) => {
     const { conversationId, messageId } = payload;
     const msg = findMessageById(conversationId, messageId);
     if(msg){
@@ -684,6 +702,26 @@ function connectSocket(){
       renderMessages(conversationId);
       updateConversationPreview(conversationId, msg);
     }
+    });
+  });
+}
+
+function ensureSocketIO(){
+  if(window.io) return Promise.resolve();
+  return new Promise((resolve, reject) => {
+    const existing = document.querySelector('script[data-socketio]');
+    if(existing){
+      existing.addEventListener('load', () => resolve());
+      existing.addEventListener('error', () => reject(new Error('Socket.IO failed to load')));
+      return;
+    }
+    const s = document.createElement('script');
+    s.src = API_BASE + '/socket.io/socket.io.js';
+    s.async = true;
+    s.dataset.socketio = 'true';
+    s.onload = () => resolve();
+    s.onerror = () => reject(new Error('Socket.IO failed to load'));
+    document.head.appendChild(s);
   });
 }
 
