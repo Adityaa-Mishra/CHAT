@@ -1,7 +1,8 @@
-/* Real-time chat client */
-const API_BASE = (window.location.port === '5500')
-  ? 'http://127.0.0.1:5000'
-  : window.location.origin;
+// API configuration deployed on render
+const API_BASE =
+  window.location.hostname === "localhost"
+    ? "http://127.0.0.1:5000"
+    : "https://chat-7jt6.onrender.com";
 
 let currentUser = null;
 let conversations = [];
