@@ -11,6 +11,16 @@ const MessageSchema = new mongoose.Schema({
     size: Number,
     mime: String
   },
+  replyTo: {
+    messageId: { type: mongoose.Schema.Types.ObjectId, ref: 'Message' },
+    sender: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    text: { type: String, default: '' },
+    type: { type: String, enum: ['text','file'], default: 'text' },
+    file: {
+      name: String,
+      url: String
+    }
+  },
   editedAt: { type: Date, default: null },
   deleted: { type: Boolean, default: false },
   status: { type: String, enum: ['sent','delivered','read'], default: 'sent' }

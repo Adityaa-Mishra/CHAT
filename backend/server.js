@@ -110,7 +110,7 @@ io.on('connection', async (socket) => {
     socket.to('conv:' + conversationId).emit('typing:update', { conversationId, userId, isTyping: !!isTyping });
   });
 
-  socket.on('message:send', async ({ conversationId, text, type, file, clientId }) => {
+  socket.on('message:send', async ({ conversationId, text, type, file, clientId, replyTo }) => {
     if(!conversationId) return;
     const msgType = type || 'text';
     if(msgType === 'text' && !text) return;
@@ -125,12 +125,27 @@ io.on('connection', async (socket) => {
     const delivered = recipients.some(r => isUserOnline(r.toString()));
     if(delivered) status = 'delivered';
 
+    let replyMeta = null;
+    if(replyTo?.messageId){
+      const target = await Message.findById(replyTo.messageId);
+      if(target && target.conversationId.toString() === conversationId){
+        replyMeta = {
+          messageId: target._id,
+          sender: target.sender,
+          text: target.deleted ? 'Message deleted' : (target.text || ''),
+          type: target.type || 'text',
+          file: target.file ? { name: target.file.name || '', url: target.file.url || '' } : null
+        };
+      }
+    }
+
     const message = await Message.create({
       conversationId,
       sender: userId,
       text: text || '',
       type: msgType,
       file: file || null,
+      replyTo: replyMeta,
       status
     });
 
@@ -144,6 +159,7 @@ io.on('connection', async (socket) => {
       text: text || '',
       type: msgType,
       file: file || null,
+      replyTo: replyMeta,
       status,
       createdAt: message.createdAt,
       clientId

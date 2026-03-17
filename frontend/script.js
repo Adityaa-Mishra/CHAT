@@ -14,8 +14,8 @@ let typingState = { isTyping: false, timeout: null };
 const PAGE_KEY = 'cipher_last_page';
 const CONV_KEY = 'cipher_last_conv';
 let actionsMenu = null;
-let lastTapTime = 0;
-let lastTapTarget = null;
+let replyState = null;
+let groupSelected = new Map();
 
 const el = (id) => document.getElementById(id);
 
@@ -64,7 +64,259 @@ function switchTab(t){
   el('form-signup').classList.toggle('hidden', t !== 'signup');
 }
 
-document.addEventListener('keydown', e => { if(e.key === 'Escape') closeModal(); });
+function openGroupCreateModal(){
+  if(!currentUser) return;
+  groupSelected = new Map();
+  el('g-name').value = '';
+  el('g-search').value = '';
+  el('g-results').innerHTML = '';
+  el('g-selected').innerHTML = '';
+  renderGroupSelected();
+  el('g-err').classList.add('hidden');
+  el('group-create-backdrop').classList.add('open');
+}
+
+function closeGroupCreateModal(){
+  el('group-create-backdrop').classList.remove('open');
+}
+
+function openGroupInfoModal(){
+  if(!activeConvId) return;
+  const conv = conversations.find(c => c._id === activeConvId);
+  if(!conv || !conv.isGroup) return;
+  el('gi-title').textContent = conv.name || 'Group';
+  el('gi-name').value = conv.name || '';
+  el('gi-name').disabled = !isAdmin(conv);
+  el('gi-save-btn').classList.toggle('hidden', !isAdmin(conv));
+  el('gi-search').value = '';
+  el('gi-results').innerHTML = '';
+  renderGroupMembers(conv);
+  el('group-info-backdrop').classList.add('open');
+}
+
+function closeGroupInfoModal(){
+  el('group-info-backdrop').classList.remove('open');
+}
+
+function handleGroupBackdrop(e, id){
+  if(e.target === el(id)){
+    if(id === 'group-create-backdrop') closeGroupCreateModal();
+    if(id === 'group-info-backdrop') closeGroupInfoModal();
+  }
+}
+
+async function searchGroupUsers(isInfo=false){
+  const input = el(isInfo ? 'gi-search' : 'g-search');
+  const q = input.value.trim();
+  const resEl = el(isInfo ? 'gi-results' : 'g-results');
+  if(!q){ resEl.innerHTML = ''; return; }
+  try{
+    const data = await api('/api/users/search?q=' + encodeURIComponent(q));
+    const results = data.users || [];
+    hydrateUserMap(results);
+    resEl.innerHTML = '';
+    results.forEach(u => {
+      if(u._id === currentUser._id) return;
+      if(isInfo){
+        const conv = conversations.find(c => c._id === activeConvId);
+        if(conv && conv.participants?.some(p => (p._id || p).toString() === u._id)) return;
+      }
+      if(!isInfo && groupSelected.has(u._id)) return;
+      const row = document.createElement('div');
+      row.className = 'g-item';
+      row.innerHTML = `
+        <div>@${u.username}</div>
+        <div class="g-actions"><button class="btn btn-ghost btn-sm">Add</button></div>
+      `;
+      row.querySelector('button').onclick = () => {
+        if(isInfo){
+          addGroupMembers([u._id]);
+        }else{
+          groupSelected.set(u._id, u);
+          renderGroupSelected();
+          resEl.innerHTML = '';
+          input.value = '';
+        }
+      };
+      resEl.appendChild(row);
+    });
+  }catch(err){
+    toast(err.message || 'Search failed', 'err');
+  }
+}
+
+function renderGroupSelected(){
+  const box = el('g-selected');
+  box.innerHTML = '';
+  if(groupSelected.size === 0){
+    box.innerHTML = '<div style="padding:6px 8px;color:var(--ink-4);font-size:0.8rem">No members selected yet.</div>';
+    return;
+  }
+  groupSelected.forEach(u => {
+    const pill = document.createElement('div');
+    pill.className = 'g-pill';
+    pill.innerHTML = `<span>@${u.username}</span><button title="Remove">âœ•</button>`;
+    pill.querySelector('button').onclick = () => {
+      groupSelected.delete(u._id);
+      renderGroupSelected();
+    };
+    box.appendChild(pill);
+  });
+}
+
+async function createGroup(){
+  const name = el('g-name').value.trim();
+  const errEl = el('g-err');
+  errEl.classList.add('hidden');
+  if(!name){ errEl.textContent = 'Group name required.'; errEl.classList.remove('hidden'); return; }
+  const userIds = Array.from(groupSelected.keys());
+  if(userIds.length < 1){ errEl.textContent = 'Add at least one member.'; errEl.classList.remove('hidden'); return; }
+  el('g-btn').textContent = 'Creating...';
+  try{
+    const data = await api('/api/conversations/group', { method:'POST', body: JSON.stringify({ name, userIds }) });
+    updateConversationInList(data.conversation);
+    closeGroupCreateModal();
+    showPage('page-chat');
+    await openConversation(data.conversation._id);
+  }catch(err){
+    errEl.textContent = err.message || 'Failed to create group.';
+    errEl.classList.remove('hidden');
+  }finally{
+    el('g-btn').textContent = 'Create Group';
+  }
+}
+
+function isAdmin(conv){
+  return (conv.admins || []).some(a => (a._id || a).toString() === currentUser._id);
+}
+
+function renderGroupMembers(conv){
+  const box = el('gi-members');
+  box.innerHTML = '';
+  const adminIds = new Set((conv.admins || []).map(a => (a._id || a).toString()));
+  (conv.participants || []).forEach(p => {
+    const u = typeof p === 'string' ? (userMap[p] || { _id: p, username: 'user' }) : p;
+    const row = document.createElement('div');
+    row.className = 'g-item';
+    const isMe = u._id === currentUser._id;
+    const adminBadge = adminIds.has(u._id) ? ' <span style="color:var(--accent)">Admin</span>' : '';
+    row.innerHTML = `
+      <div>@${u.username}${isMe ? ' (you)' : ''}${adminBadge}</div>
+      <div class="g-actions"></div>
+    `;
+    const actions = row.querySelector('.g-actions');
+    if(isAdmin(conv) && !isMe){
+      const removeBtn = document.createElement('button');
+      removeBtn.className = 'btn btn-ghost btn-sm';
+      removeBtn.textContent = 'Remove';
+      removeBtn.onclick = () => removeGroupMember(u._id);
+      actions.appendChild(removeBtn);
+      if(adminIds.has(u._id)){
+        const demoteBtn = document.createElement('button');
+        demoteBtn.className = 'btn btn-ghost btn-sm';
+        demoteBtn.textContent = 'Demote';
+        demoteBtn.onclick = () => demoteAdmin(u._id);
+        actions.appendChild(demoteBtn);
+      }else{
+        const promoteBtn = document.createElement('button');
+        promoteBtn.className = 'btn btn-ghost btn-sm';
+        promoteBtn.textContent = 'Promote';
+        promoteBtn.onclick = () => promoteAdmin(u._id);
+        actions.appendChild(promoteBtn);
+      }
+    }
+    box.appendChild(row);
+  });
+  el('gi-add-wrap').classList.toggle('hidden', !isAdmin(conv));
+}
+
+async function saveGroupName(){
+  const conv = conversations.find(c => c._id === activeConvId);
+  if(!conv || !conv.isGroup) return;
+  const name = el('gi-name').value.trim();
+  if(!name) return toast('Group name required', 'err');
+  try{
+    const data = await api('/api/conversations/' + conv._id + '/name', { method:'PATCH', body: JSON.stringify({ name }) });
+    updateConversationInList(data.conversation);
+    renderGroupMembers(data.conversation);
+  }catch(err){
+    toast(err.message || 'Failed to update group', 'err');
+  }
+}
+
+async function addGroupMembers(userIds){
+  const conv = conversations.find(c => c._id === activeConvId);
+  if(!conv || !conv.isGroup) return;
+  try{
+    const data = await api('/api/conversations/' + conv._id + '/participants', { method:'POST', body: JSON.stringify({ userIds }) });
+    updateConversationInList(data.conversation);
+    renderGroupMembers(data.conversation);
+    el('gi-results').innerHTML = '';
+    el('gi-search').value = '';
+  }catch(err){
+    toast(err.message || 'Failed to add members', 'err');
+  }
+}
+
+async function removeGroupMember(userId){
+  const conv = conversations.find(c => c._id === activeConvId);
+  if(!conv || !conv.isGroup) return;
+  if(!confirm('Remove this member?')) return;
+  try{
+    const data = await api('/api/conversations/' + conv._id + '/participants/' + userId, { method:'DELETE' });
+    updateConversationInList(data.conversation);
+    renderGroupMembers(data.conversation);
+  }catch(err){
+    toast(err.message || 'Failed to remove member', 'err');
+  }
+}
+
+async function promoteAdmin(userId){
+  const conv = conversations.find(c => c._id === activeConvId);
+  if(!conv || !conv.isGroup) return;
+  try{
+    const data = await api('/api/conversations/' + conv._id + '/admins', { method:'POST', body: JSON.stringify({ userId }) });
+    updateConversationInList(data.conversation);
+    renderGroupMembers(data.conversation);
+  }catch(err){
+    toast(err.message || 'Failed to promote', 'err');
+  }
+}
+
+async function demoteAdmin(userId){
+  const conv = conversations.find(c => c._id === activeConvId);
+  if(!conv || !conv.isGroup) return;
+  try{
+    const data = await api('/api/conversations/' + conv._id + '/admins/' + userId, { method:'DELETE' });
+    updateConversationInList(data.conversation);
+    renderGroupMembers(data.conversation);
+  }catch(err){
+    toast(err.message || 'Failed to demote', 'err');
+  }
+}
+
+async function leaveGroup(){
+  const conv = conversations.find(c => c._id === activeConvId);
+  if(!conv || !conv.isGroup) return;
+  if(!confirm('Leave this group?')) return;
+  try{
+    await api('/api/conversations/' + conv._id + '/leave', { method:'POST' });
+    conversations = conversations.filter(c => c._id !== conv._id);
+    closeGroupInfoModal();
+    showConversationList();
+    renderConvList();
+  }catch(err){
+    toast(err.message || 'Failed to leave group', 'err');
+  }
+}
+
+document.addEventListener('keydown', e => {
+  if(e.key === 'Escape'){
+    closeModal();
+    closeGroupCreateModal();
+    closeGroupInfoModal();
+  }
+});
 
 async function submitLogin(){
   const email = el('l-email').value.trim();
@@ -284,6 +536,33 @@ function getOtherParticipant(conv){
   return (conv.participants || []).find(p => p._id !== currentUser._id);
 }
 
+function isGroupConv(conv){
+  return !!conv && !!conv.isGroup;
+}
+
+function getConvTitle(conv){
+  if(isGroupConv(conv)) return conv.name || 'Group';
+  const other = getOtherParticipant(conv);
+  return other ? '@' + other.username : 'Chat';
+}
+
+function getConvAvatarText(conv){
+  if(isGroupConv(conv)) return initials(conv.name || 'GR');
+  const other = getOtherParticipant(conv);
+  return other ? initials(other.username) : '?';
+}
+
+function getUsernameFor(conv, userId){
+  if(!userId) return 'Unknown';
+  const fromMap = userMap[userId];
+  if(fromMap && fromMap.username) return fromMap.username;
+  if(conv && Array.isArray(conv.participants)){
+    const match = conv.participants.find(p => (p._id || p).toString() === userId.toString());
+    if(match && match.username) return match.username;
+  }
+  return 'Unknown';
+}
+
 function renderConvList(){
   const list = el('c-conv-list');
   list.innerHTML = '';
@@ -296,8 +575,6 @@ function renderConvList(){
   conversations.sort((a,b) => new Date(b.updatedAt) - new Date(a.updatedAt));
 
   conversations.forEach(conv => {
-    const other = getOtherParticipant(conv);
-    if(!other) return;
     const last = conv.lastMessage;
     const preview = last
       ? (last.type === 'file' ? ('File: ' + (last.file?.name || 'attachment')) : (last.text || ''))
@@ -308,14 +585,20 @@ function renderConvList(){
     const elConv = document.createElement('div');
     elConv.className = 'c-conv' + (isActive ? ' active' : '');
     elConv.id = 'conv-' + conv._id;
+    const title = getConvTitle(conv);
+    const avatarText = getConvAvatarText(conv);
+    const displayPreview = isGroupConv(conv) && last && last.sender
+      ? ((userMap[last.sender]?.username ? (userMap[last.sender].username + ': ') : '') + preview)
+      : preview;
+    const memberCount = isGroupConv(conv) ? (conv.participants?.length || 0) : 0;
     elConv.innerHTML = `
       <div class="avatar" style="position:relative">
-        ${initials(other.username)}
-        ${other.online ? '<span style="position:absolute;bottom:0;right:0;width:9px;height:9px;border-radius:50%;background:var(--green);border:2px solid var(--cream)"></span>' : ''}
+        ${avatarText}
+        ${(!isGroupConv(conv) && getOtherParticipant(conv)?.online) ? '<span style="position:absolute;bottom:0;right:0;width:9px;height:9px;border-radius:50%;background:var(--green);border:2px solid var(--cream)"></span>' : ''}
       </div>
       <div class="c-conv-info">
-        <div class="c-conv-name">@${other.username}</div>
-        <div class="c-conv-preview">${esc(preview)}</div>
+        <div class="c-conv-name">${esc(title)}${isGroupConv(conv) ? ` <span style="color:var(--ink-4);font-weight:400">(${memberCount})</span>` : ''}</div>
+        <div class="c-conv-preview">${esc(displayPreview)}</div>
       </div>
       <div class="c-conv-meta">
         <div class="c-conv-time">${last ? fmtTime(last.createdAt) : ''}</div>
@@ -343,19 +626,30 @@ async function openOrCreateConv(userId){
 
 async function openConversation(convId){
   activeConvId = convId;
+  clearReply();
   try{ localStorage.setItem(CONV_KEY, convId); }catch(_){}
   const conv = conversations.find(c => c._id === convId);
   if(!conv) return;
-  const other = getOtherParticipant(conv);
 
   document.querySelectorAll('.c-conv').forEach(elm => elm.classList.remove('active'));
   const convEl = el('conv-' + convId);
   if(convEl) convEl.classList.add('active');
 
-  if(other){
-    el('c-head-avatar').textContent = initials(other.username);
-    el('c-head-name').textContent = '@' + other.username;
-    updateHeaderStatus(other);
+  if(isGroupConv(conv)){
+    el('c-head-avatar').textContent = initials(conv.name || 'GR');
+    el('c-head-name').textContent = conv.name || 'Group';
+    const count = conv.participants?.length || 0;
+    el('c-head-status').className = 'c-head-status';
+    el('c-head-status').textContent = count + ' member' + (count !== 1 ? 's' : '');
+    el('c-group-btn').classList.remove('hidden');
+  }else{
+    const other = getOtherParticipant(conv);
+    if(other){
+      el('c-head-avatar').textContent = initials(other.username);
+      el('c-head-name').textContent = '@' + other.username;
+      updateHeaderStatus(other);
+    }
+    el('c-group-btn').classList.add('hidden');
   }
 
   el('c-empty').style.display = 'none';
@@ -393,6 +687,8 @@ function renderMessages(convId){
   const area = el('c-msgs');
   area.innerHTML = '';
   const msgs = messagesByConv[convId] || [];
+  const conv = conversations.find(c => c._id === convId);
+  const isGroup = !!conv && conv.isGroup;
 
   if(!msgs.length){
     area.innerHTML = '<div style="text-align:center;padding:40px;font-size:0.82rem;color:var(--ink-4)">No messages yet. Say hello!</div>';
@@ -415,6 +711,9 @@ function renderMessages(convId){
     wrap.className = 'msg ' + (isSent ? 'sent' : 'recv');
     wrap.dataset.msgId = m._id;
     const fileUrl = m.file?.url ? (m.file.url.startsWith('/') ? (API_BASE + m.file.url) : m.file.url) : '#';
+    const senderName = '@' + getUsernameFor(conv, m.sender);
+    const senderLabel = (!isSent && isGroup) ? '<div class="msg-sender">' + esc(senderName) + '</div>' : '';
+    const replyLabel = (isGroup && m.replyTo) ? renderReplyPreview(m.replyTo, conv, isGroup) : '';
     const content = m.type === 'file'
       ? `<a href="${fileUrl}" target="_blank" rel="noopener">${esc(m.file?.name || 'File')}</a>`
       : (m.deleted ? 'Message deleted' : esc(m.text || ''));
@@ -424,8 +723,10 @@ function renderMessages(convId){
     const actionsBtn = isSent
       ? `<button class="msg-actions-trigger" title="Message options" data-msg-id="${m._id}">⋯</button>`
       : '';
+    const replyBtn = `<button class="msg-reply-trigger" title="Reply" data-msg-id="${m._id}">↩</button>`;
     wrap.innerHTML = `
-      <div class="msg-bubble">${content}</div>
+      <div class="msg-bubble">${senderLabel}${replyLabel}${content}</div>
+      ${replyBtn}
       ${actionsBtn}
       <div class="msg-time">
         ${timeLabel}
@@ -451,14 +752,45 @@ function renderTypingIndicator(convId){
   area.appendChild(wrap);
 }
 
+function renderReplyPreview(reply, conv, isGroup){
+  const senderName = '@' + getUsernameFor(conv, reply.sender);
+  const body = reply.type === 'file'
+    ? ('File: ' + (reply.file?.name || 'attachment'))
+    : (reply.text || 'Message');
+  const msgId = reply.messageId ? reply.messageId.toString() : '';
+  const namePart = isGroup ? `<strong>${esc(senderName)}</strong> ` : '';
+  return `<div class="msg-reply" data-reply-id="${msgId}">${namePart}${esc(body)}</div>`;
+}
+
+function setReply(msg){
+  if(!msg) return;
+  const reply = {
+    messageId: msg._id,
+    sender: msg.sender,
+    text: msg.deleted ? 'Message deleted' : (msg.text || ''),
+    type: msg.type || 'text',
+    file: msg.file || null
+  };
+  replyState = reply;
+  const label = reply.sender === currentUser._id ? 'Replying to yourself' : 'Replying to @' + (userMap[reply.sender]?.username || 'user');
+  el('reply-label').textContent = label;
+  const text = reply.type === 'file'
+    ? ('File: ' + (reply.file?.name || 'attachment'))
+    : (reply.text || 'Message');
+  el('reply-text').textContent = text;
+  el('reply-bar').classList.remove('hidden');
+  el('c-textarea').focus();
+}
+
+function clearReply(){
+  replyState = null;
+  el('reply-bar').classList.add('hidden');
+}
+
 const textarea = el('c-textarea');
 const sendBtn  = el('c-send');
 const fileInput = el('c-file');
 const msgsArea = el('c-msgs');
-
-function isMobileView(){
-  return window.matchMedia('(max-width: 700px)').matches;
-}
 
 fileInput.addEventListener('change', async (e) => {
   const file = e.target.files && e.target.files[0];
@@ -471,14 +803,6 @@ fileInput.addEventListener('change', async (e) => {
   }finally{
     fileInput.value = '';
   }
-});
-
-msgsArea.addEventListener('dblclick', (e) => {
-  if(isMobileView()) return;
-  const msgEl = e.target.closest('.msg.sent');
-  if(!msgEl) return;
-  const msg = findMessageById(activeConvId, msgEl.dataset.msgId);
-  if(msg) showMessageActions(msg, e.clientX, e.clientY);
 });
 
 msgsArea.addEventListener('click', (e) => {
@@ -494,19 +818,50 @@ msgsArea.addEventListener('click', (e) => {
     }
     return;
   }
-  if(isMobileView()) return;
-  const msgEl = e.target.closest('.msg.sent');
-  if(!msgEl) return;
-  const now = Date.now();
-  if(lastTapTarget === msgEl && now - lastTapTime < 350){
-    const msg = findMessageById(activeConvId, msgEl.dataset.msgId);
-    if(msg) showMessageActions(msg, e.clientX, e.clientY);
-    lastTapTime = 0;
-    lastTapTarget = null;
+  const replyBtn = e.target.closest('.msg-reply-trigger');
+  if(replyBtn){
+    e.preventDefault();
+    e.stopPropagation();
+    const msgId = replyBtn.dataset.msgId;
+    const msg = findMessageById(activeConvId, msgId);
+    if(msg) setReply(msg);
     return;
   }
-  lastTapTime = now;
-  lastTapTarget = msgEl;
+  const replyPreview = e.target.closest('.msg-reply');
+  if(replyPreview){
+    const targetId = replyPreview.dataset.replyId;
+    if(targetId){
+      const targetEl = msgsArea.querySelector(`.msg[data-msg-id="${targetId}"]`);
+      if(targetEl){
+        targetEl.classList.add('msg-highlight');
+        targetEl.scrollIntoView({ behavior:'smooth', block:'center' });
+        setTimeout(() => targetEl.classList.remove('msg-highlight'), 1200);
+      }
+    }
+  }
+});
+
+let touchStartX = 0;
+let touchStartY = 0;
+let touchStartMsgId = null;
+msgsArea.addEventListener('touchstart', (e) => {
+  const msgEl = e.target.closest('.msg');
+  if(!msgEl) return;
+  const t = e.touches[0];
+  touchStartX = t.clientX;
+  touchStartY = t.clientY;
+  touchStartMsgId = msgEl.dataset.msgId;
+});
+msgsArea.addEventListener('touchend', (e) => {
+  if(!touchStartMsgId) return;
+  const t = e.changedTouches[0];
+  const dx = t.clientX - touchStartX;
+  const dy = t.clientY - touchStartY;
+  if(dx > 60 && Math.abs(dy) < 30){
+    const msg = findMessageById(activeConvId, touchStartMsgId);
+    if(msg) setReply(msg);
+  }
+  touchStartMsgId = null;
 });
 
 textarea.addEventListener('input', () => {
@@ -524,11 +879,13 @@ async function sendMsg(){
   if(!text || !activeConvId || !currentUser) return;
 
   const clientId = 'c' + Date.now() + Math.random().toString(36).slice(2,6);
+  const replyTo = replyState ? Object.assign({}, replyState) : null;
   const msg = {
     _id: clientId,
     sender: currentUser._id,
     text,
     type: 'text',
+    replyTo,
     status: 'sent',
     createdAt: new Date().toISOString(),
     clientId
@@ -540,15 +897,16 @@ async function sendMsg(){
   textarea.value = '';
   textarea.style.height = 'auto';
   sendBtn.disabled = true;
+  if(replyState) clearReply();
 
   renderMessages(activeConvId);
   updateConversationPreview(activeConvId, msg);
 
   if(socket && socket.connected){
-    socket.emit('message:send', { conversationId: activeConvId, text, type: 'text', clientId });
+    socket.emit('message:send', { conversationId: activeConvId, text, type: 'text', clientId, replyTo });
   }else{
     try{
-      await api('/api/messages', { method:'POST', body: JSON.stringify({ conversationId: activeConvId, text, type: 'text' }) });
+      await api('/api/messages', { method:'POST', body: JSON.stringify({ conversationId: activeConvId, text, type: 'text', replyTo }) });
     }catch(err){
       toast(err.message || 'Message failed to send', 'err');
     }
@@ -557,11 +915,13 @@ async function sendMsg(){
 
 async function sendFileMessage(fileInfo){
   const clientId = 'c' + Date.now() + Math.random().toString(36).slice(2,6);
+  const replyTo = replyState ? Object.assign({}, replyState) : null;
   const msg = {
     _id: clientId,
     sender: currentUser._id,
     type: 'file',
     file: fileInfo,
+    replyTo,
     status: 'sent',
     createdAt: new Date().toISOString(),
     clientId
@@ -571,11 +931,12 @@ async function sendFileMessage(fileInfo){
   messagesByConv[activeConvId].push(msg);
   renderMessages(activeConvId);
   updateConversationPreview(activeConvId, msg);
+  if(replyState) clearReply();
 
   if(socket && socket.connected){
-    socket.emit('message:send', { conversationId: activeConvId, type: 'file', file: fileInfo, clientId });
+    socket.emit('message:send', { conversationId: activeConvId, type: 'file', file: fileInfo, clientId, replyTo });
   }else{
-    await api('/api/messages', { method:'POST', body: JSON.stringify({ conversationId: activeConvId, type: 'file', file: fileInfo }) });
+    await api('/api/messages', { method:'POST', body: JSON.stringify({ conversationId: activeConvId, type: 'file', file: fileInfo, replyTo }) });
   }
 }
 
@@ -586,6 +947,18 @@ function updateConversationPreview(convId, msg){
   conv.lastMessage = Object.assign({}, msg, { text: previewText, createdAt: msg.createdAt || new Date().toISOString() });
   conv.updatedAt = conv.lastMessage.createdAt;
   renderConvList();
+}
+
+function updateConversationInList(updated){
+  if(!updated) return;
+  const idx = conversations.findIndex(c => c._id === updated._id);
+  if(idx >= 0) conversations[idx] = updated;
+  else conversations.push(updated);
+  hydrateUserMapFromConversations([updated]);
+  renderConvList();
+  if(activeConvId === updated._id){
+    openConversation(updated._id);
+  }
 }
 
 function filterConvs(){
@@ -623,8 +996,10 @@ function connectSocket(){
     }
     if(activeConvId){
       const active = conversations.find(c => c._id === activeConvId);
-      const other = active ? getOtherParticipant(active) : null;
-      if(other && other._id === payload.userId){ updateHeaderStatus(other); }
+      if(active && !active.isGroup){
+        const other = getOtherParticipant(active);
+        if(other && other._id === payload.userId){ updateHeaderStatus(other); }
+      }
     }
     renderConvList();
   });
@@ -942,10 +1317,14 @@ function maybeNotify(message, conv){
   const body = message.type === 'file'
     ? ('File: ' + (message.file?.name || 'attachment'))
     : (message.text || 'New message');
-  new Notification('@' + (other?.username || 'New message'), { body });
+  const title = conv && conv.isGroup
+    ? (conv.name || 'Group')
+    : ('@' + (other?.username || 'New message'));
+  new Notification(title, { body });
 }
 
 (async function init(){
   const ok = await loadMe();
   if(!ok){ showPage('page-landing'); }
 })();
+

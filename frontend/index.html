@@ -93,8 +93,8 @@
     <p class="s-sub">Search by username to start a conversation.</p>
 
     <div class="s-search-bar">
-      <span class="s-search-icon">⌕</span>
-      <input class="s-input" id="s-input" type="text" placeholder="Type a username…" autocomplete="off" autofocus/>
+      <span class="s-search-icon">Search</span>
+      <input class="s-input" id="s-input" type="text" placeholder="Type a username..." autocomplete="off" autofocus/>
       <button class="s-search-btn" onclick="doSearch()">Search</button>
     </div>
 
@@ -102,7 +102,7 @@
     <div id="s-results"></div>
 
     <div class="s-empty" id="s-empty">
-      <div class="s-empty-icon">◌</div>
+      <div class="s-empty-icon">o</div>
       <div class="s-empty-text">Search for someone to begin.</div>
     </div>
   </main>
@@ -118,15 +118,16 @@
     <div class="c-sidebar-head">
       <span class="c-logo">Cipher<span>.</span></span>
       <div class="c-sidebar-actions">
-        <button class="icon-btn" onclick="showPage('page-search')" title="Find people">⌕</button>
-        <button class="icon-btn" onclick="showPage('page-landing')" title="Back">⟵</button>
+        <button class="icon-btn" onclick="openGroupCreateModal()" title="Create group">+</button>
+        <button class="icon-btn" onclick="showPage('page-search')" title="Find people">Search</button>
+        <button class="icon-btn" onclick="showPage('page-landing')" title="Back">&#x2190;</button>
       </div>
     </div>
 
     <div class="c-sidebar-search">
       <div class="c-search-wrap">
-        <span>⌕</span>
-        <input class="c-search-input" id="c-filter" type="text" placeholder="Filter…" oninput="filterConvs()"/>
+        <span>Search</span>
+        <input class="c-search-input" id="c-filter" type="text" placeholder="Filter..." oninput="filterConvs()"/>
       </div>
     </div>
 
@@ -156,7 +157,7 @@
     <div class="c-panel" id="c-panel">
 
       <div class="c-head">
-        <button class="icon-btn c-back-btn" onclick="showConversationList()" title="Back">⟵</button>
+        <button class="icon-btn c-back-btn" onclick="showConversationList()" title="Back">&#x2190;</button>
         <div class="avatar avatar-lg" id="c-head-avatar">BO</div>
         <div class="c-head-info">
           <div class="c-head-name" id="c-head-name">@bob</div>
@@ -164,18 +165,26 @@
             <span class="online-dot"></span> Online
           </div>
         </div>
+        <button class="icon-btn c-group-btn hidden" id="c-group-btn" onclick="openGroupInfoModal()" title="Group info">Info</button>
       </div>
 
       <div class="c-msgs" id="c-msgs"></div>
 
       <div class="c-input-bar">
+      <div class="reply-bar hidden" id="reply-bar">
+        <div class="reply-meta">
+          <div class="reply-label" id="reply-label">Replying to</div>
+          <div class="reply-text" id="reply-text"></div>
+        </div>
+        <button class="reply-cancel" onclick="clearReply()">x</button>
+      </div>
       <div class="c-input-wrap">
         <label class="c-file-btn" title="Attach file">
           <input type="file" id="c-file" hidden />
           <span>+</span>
         </label>
-        <textarea class="c-textarea" id="c-textarea" rows="1" placeholder="Write a message…" maxlength="2000"></textarea>
-        <button class="c-send" id="c-send" disabled onclick="sendMsg()" title="Send (Enter)">➤</button>
+        <textarea class="c-textarea" id="c-textarea" rows="1" placeholder="Write a message..." maxlength="2000"></textarea>
+        <button class="c-send" id="c-send" disabled onclick="sendMsg()" title="Send (Enter)">&#x27A4;</button>
       </div>
       </div>
 
@@ -188,7 +197,7 @@
 ═══════════════════════════════════════════════════════ -->
 <div class="modal-backdrop" id="modal-backdrop" onclick="handleBackdropClick(event)">
   <div class="modal">
-    <button class="modal-close" onclick="closeModal()">✕</button>
+    <button class="modal-close" onclick="closeModal()">x</button>
 
     <div class="modal-tabs">
       <div class="modal-tab active" id="tab-login" onclick="switchTab('login')">Sign In</div>
@@ -205,7 +214,7 @@
       </div>
       <div class="form-group">
         <label class="form-label">Password</label>
-        <input class="form-input" id="l-pass" type="password" placeholder="••••••••" onkeydown="if(event.key==='Enter')submitLogin()"/>
+        <input class="form-input" id="l-pass" type="password" placeholder="********" onkeydown="if(event.key==='Enter')submitLogin()"/>
       </div>
       <div class="form-err hidden" id="l-err"></div>
       <button class="btn btn-ink w-full" style="margin-top:6px" onclick="submitLogin()" id="l-btn">Sign In</button>
@@ -238,6 +247,61 @@
 <!-- ═══════════════════════════════════════════════════════
      JAVASCRIPT
 ═══════════════════════════════════════════════════════ -->
+
+<!-- ═══════════════════════════════════════════════════════
+     GROUP CREATE MODAL
+═══════════════════════════════════════════════════════ -->
+<div class="modal-backdrop" id="group-create-backdrop" onclick="handleGroupBackdrop(event, 'group-create-backdrop')">
+  <div class="modal">
+    <button class="modal-close" onclick="closeGroupCreateModal()">x</button>
+    <div class="modal-eyebrow">New group</div>
+    <h2 class="modal-title">Create group.</h2>
+    <div class="form-group">
+      <label class="form-label">Group name</label>
+      <input class="form-input" id="g-name" type="text" placeholder="e.g. Weekend Plans" maxlength="30"/>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Add members</label>
+      <input class="form-input" id="g-search" type="text" placeholder="Search usernames..." oninput="searchGroupUsers()"/>
+    </div>
+    <div class="g-results" id="g-results"></div>
+    <div class="g-selected" id="g-selected"></div>
+    <div class="form-err hidden" id="g-err"></div>
+    <button class="btn btn-ink w-full" style="margin-top:10px" onclick="createGroup()" id="g-btn">Create Group</button>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════
+     GROUP INFO MODAL
+═══════════════════════════════════════════════════════ -->
+<div class="modal-backdrop" id="group-info-backdrop" onclick="handleGroupBackdrop(event, 'group-info-backdrop')">
+  <div class="modal">
+    <button class="modal-close" onclick="closeGroupInfoModal()">x</button>
+    <div class="modal-eyebrow">Group info</div>
+    <h2 class="modal-title" id="gi-title">Group</h2>
+    <div class="form-group">
+      <label class="form-label">Group name</label>
+      <input class="form-input" id="gi-name" type="text" placeholder="Group name" maxlength="30"/>
+    </div>
+    <button class="btn btn-ghost w-full" style="margin-top:-6px" onclick="saveGroupName()" id="gi-save-btn">Save Name</button>
+    <div class="g-section-title">Members</div>
+    <div class="g-members" id="gi-members"></div>
+    <div class="form-group" id="gi-add-wrap">
+      <label class="form-label">Add members</label>
+      <input class="form-input" id="gi-search" type="text" placeholder="Search usernames..." oninput="searchGroupUsers(true)"/>
+      <div class="g-results" id="gi-results"></div>
+    </div>
+    <button class="btn btn-ghost w-full" onclick="leaveGroup()" id="gi-leave-btn">Leave Group</button>
+  </div>
+</div>
 <script src="script.js"></script>
 </body>
 </html>
+
+
+
+
+
+
+
+

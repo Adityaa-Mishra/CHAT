@@ -25,7 +25,7 @@ router.get('/:conversationId', auth, async (req, res) => {
 });
 
 router.post('/', auth, async (req, res) => {
-  const { conversationId, text, type, file } = req.body;
+  const { conversationId, text, type, file, replyTo } = req.body;
   if(!conversationId) return res.status(400).json({ message: 'Missing conversationId' });
   const msgType = type || 'text';
   if(msgType === 'text' && !text) return res.status(400).json({ message: 'Missing text' });
@@ -34,12 +34,27 @@ router.post('/', auth, async (req, res) => {
   const conv = await ensureParticipant(conversationId, req.user.id);
   if(!conv) return res.status(403).json({ message: 'Forbidden' });
 
+  let replyMeta = null;
+  if(replyTo?.messageId){
+    const target = await Message.findById(replyTo.messageId);
+    if(target && target.conversationId.toString() === conversationId){
+      replyMeta = {
+        messageId: target._id,
+        sender: target.sender,
+        text: target.deleted ? 'Message deleted' : (target.text || ''),
+        type: target.type || 'text',
+        file: target.file ? { name: target.file.name || '', url: target.file.url || '' } : null
+      };
+    }
+  }
+
   const message = await Message.create({
     conversationId,
     sender: req.user.id,
     text: text || '',
     type: msgType,
     file: file || null,
+    replyTo: replyMeta,
     status: 'sent'
   });
 
