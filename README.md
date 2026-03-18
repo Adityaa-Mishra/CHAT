@@ -1,136 +1,227 @@
-# Cipher Chat
+# 🚀 Cipher Chat
 
-Cipher is a real-time chat web app with 1-on-1 and WhatsApp-inspired group conversations. It�s built with Node.js, Express, MongoDB, Socket.IO, and a custom frontend UI.
+Cipher is a **real-time full-stack chat application** featuring 1-on-1 messaging and WhatsApp-inspired group conversations. Built with modern web technologies for speed, scalability, and smooth UX.
 
-## Features
+---
 
-### Core chat
-- Real-time messaging with Socket.IO (instant delivery without refresh)
-- 1-on-1 conversations
-- Group conversations with admin roles
-- Message status: Sent, Delivered, Read
-- Message edit and delete (sender only)
-- File uploads and sharing
-- Typing indicators
-- Unread counts and conversation previews
-- Notifications (browser)
+## ✨ Features
 
-### Replies
-- Reply to any message
-- Mobile: swipe right to reply
-- Desktop: reply button on each message
-- Reply context is preserved in both 1-on-1 and group chats
+### 💬 Core Chat
 
-### Groups (WhatsApp-inspired)
-- Create groups with a name and multiple members
-- Admin powers
-  - Rename group
-  - Add members
-  - Remove members
-  - Promote/demote admins
-- Members can leave groups
-- Group header shows member count
-- Group message sender labels
+* Real-time messaging using Socket.IO
+* 1-on-1 conversations
+* Group chats with admin roles
+* Message status: Sent, Delivered, Read
+* Edit & delete messages (sender only)
+* File sharing support
+* Typing indicators
+* Unread message counters
+* Browser notifications
 
-### Group-only enhancements
-- Read receipts become **Seen** only when **all members** have read
-- Message **Info** (inside three-dot menu) shows who has seen vs not seen
-- Group @-mention helper (type `@` to pick members)
-- Group typing indicator shows **who** is typing
+---
 
-### UI/UX
-- Clean, premium layout with responsive design
-- Sidebar with conversation list and search
-- Action menu (three dots) on sent messages
-- Reply preview bar above input
-- Modals for login/signup, group create, group info, message info
+### 🔁 Replies
 
-## Tech Stack
+* Reply to any message
+* Swipe-to-reply (mobile)
+* Reply button (desktop)
+* Preserved reply context
+
+---
+
+### 👥 Groups (WhatsApp-style)
+
+* Create groups with multiple members
+* Admin controls:
+
+  * Rename group
+  * Add/remove members
+  * Promote/demote admins
+* Members can leave groups
+* Member count display
+* Sender labels in messages
+
+---
+
+### 🧠 Smart Group Features
+
+* Seen status only when **everyone has read**
+* Message info (who has seen/not seen)
+* @mention system
+* Group typing indicators (shows who is typing)
+
+---
+
+### 🎨 UI/UX
+
+* Clean and responsive design
+* Sidebar with search & chats
+* Message action menu
+* Reply preview bar
+* Interactive modals
+
+---
+
+## 🛠️ Tech Stack
 
 **Frontend**
-- Vanilla HTML/CSS/JS
-- Responsive layout
-- Custom UI theme
+
+* HTML, CSS, JavaScript
+* Responsive custom UI
 
 **Backend**
-- Node.js + Express
-- MongoDB + Mongoose
-- Socket.IO for real-time events
 
-## Project Structure
+* Node.js
+* Express.js
+* MongoDB + Mongoose
+* Socket.IO
+
+---
+
+## 📁 Project Structure
 
 ```
 backend/
-  config/         # DB connection
-  middleware/     # Auth middleware
-  models/         # Mongoose schemas (User, Conversation, Message)
-  routes/         # REST APIs
-  uploads/        # Uploaded files
-  server.js       # Express + Socket.IO server
+  config/
+  middleware/
+  models/
+  routes/
+  uploads/
+  server.js
+
 frontend/
   index.html
   style.css
   script.js
 ```
 
-## Key Data Models
+---
 
-### Conversation
-- `participants[]`
-- `lastMessage`
-- `isGroup`
-- `name`
-- `admins[]`
-- `createdBy`
+## ⚙️ Setup Instructions
 
-### Message
-- `conversationId`
-- `sender`
-- `text`
-- `type` (text/file)
-- `file` metadata
-- `replyTo` snapshot
-- `readBy[]` (group read receipts)
-- `status` (sent/delivered/read)
-- `editedAt`, `deleted`
+### 1. Clone the repository
 
-## Real-time Events (Socket.IO)
-
-- `message:send` ? send messages (text/file)
-- `message:new` ? broadcast new messages
-- `message:status` ? sent/delivered/read updates
-- `message:read` ? mark read
-- `message:readers` ? group read receipts per user
-- `message:edit` / `message:delete` ? update/delete messages
-- `message:updated` / `message:deleted` ? broadcast changes
-- `message:typing` / `typing:update` ? typing indicators
-- `presence:update` ? online/offline status
-
-## REST API (high level)
-
-- `POST /api/auth/signup` / `POST /api/auth/login`
-- `GET /api/users/me`
-- `GET /api/users/search?q=`
-- `GET /api/conversations`
-- `POST /api/conversations` (1-on-1)
-- `POST /api/conversations/group` (create group)
-- `PATCH /api/conversations/:id/name`
-- `POST /api/conversations/:id/participants`
-- `DELETE /api/conversations/:id/participants/:userId`
-- `POST /api/conversations/:id/admins`
-- `DELETE /api/conversations/:id/admins/:userId`
-- `POST /api/conversations/:id/leave`
-- `GET /api/messages/:conversationId`
-- `POST /api/messages`
-- `PATCH /api/messages/:id`
-- `DELETE /api/messages/:id`
-- `POST /api/upload`
-
-## Notes
-- Group read receipts only mark **Seen** once everyone has read.
-- 1-on-1 behavior remains unchanged from standard read receipts.
-- Reply and mention features are designed not to break layout.
+```bash
+git clone https://github.com/your-username/cipher-chat.git
+cd cipher-chat
+```
 
 ---
 
-If you want this README expanded with setup steps, environment variables, or deployment instructions, just tell me and I�ll add them.
+### 2. Install dependencies
+
+```bash
+cd backend
+npm install
+```
+
+---
+
+### 3. Environment Variables
+
+Create a `.env` file inside `backend/`:
+
+```env
+PORT=5000
+MONGO_URI=your_mongodb_connection_string
+JWT_SECRET=your_secret_key
+```
+
+---
+
+### 4. Run the server
+
+```bash
+npm start
+```
+
+---
+
+### 5. Open frontend
+
+Just open:
+
+```
+frontend/index.html
+```
+
+---
+
+## 🌐 Deployment
+
+You can deploy using:
+
+* Backend → Render / Railway
+* Database → MongoDB Atlas
+* Frontend → Netlify / Vercel
+
+---
+
+## 📱 Install as App (PWA)
+
+Cipher Chat can be installed like a mobile app:
+
+* Open the website in Chrome
+* Click **“Install App”** button
+* Or use browser menu → *Add to Home Screen*
+
+---
+
+## 🔌 API Overview
+
+### Auth
+
+* POST `/api/auth/signup`
+* POST `/api/auth/login`
+
+### Users
+
+* GET `/api/users/me`
+* GET `/api/users/search?q=`
+
+### Conversations
+
+* GET `/api/conversations`
+* POST `/api/conversations`
+* POST `/api/conversations/group`
+
+### Messages
+
+* GET `/api/messages/:conversationId`
+* POST `/api/messages`
+* PATCH `/api/messages/:id`
+* DELETE `/api/messages/:id`
+
+---
+
+## ⚡ Real-Time Events
+
+* `message:send`
+* `message:new`
+* `message:status`
+* `message:read`
+* `message:typing`
+* `presence:update`
+
+---
+
+## 🧠 Notes
+
+* Group messages show **Seen** only when all users read them
+* 1-on-1 chats use standard read receipts
+* UI is optimized for both mobile and desktop
+
+---
+
+## 📌 Future Improvements
+
+* Voice messages
+* Video calling
+* End-to-end encryption
+* Mobile app version
+
+---
+
+## 👨‍💻 Author
+
+Aditya Mishra
