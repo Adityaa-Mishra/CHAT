@@ -760,6 +760,11 @@ input,textarea{font-family:'Jost',sans-serif}
   border-radius:14px 14px 14px 3px;
   box-shadow:var(--shadow-sm);
 }
+.typing-label{
+  font-size:0.76rem;
+  color:var(--ink-3);
+  margin-bottom:4px;
+}
 .typing-dot{
   width:6px;height:6px;border-radius:50%;
   background:var(--ink-4);
@@ -778,7 +783,27 @@ input,textarea{font-family:'Jost',sans-serif}
   background:var(--cream);
   border-top:1px solid var(--border);
   flex-shrink:0;
+  position:relative;
 }
+.mention-list{
+  position:absolute;
+  left:28px;
+  right:28px;
+  bottom:72px;
+  background:#fff;
+  border:1px solid var(--cream-3);
+  border-radius:var(--radius-sm);
+  box-shadow:var(--shadow);
+  max-height:180px;
+  overflow-y:auto;
+  z-index:20;
+}
+.mention-item{
+  padding:8px 12px;
+  font-size:0.85rem;
+  cursor:pointer;
+}
+.mention-item:hover{background:var(--cream-2)}
 .c-input-wrap{
   display:flex;align-items:flex-end;gap:10px;
   background:#fff;
@@ -860,5 +885,6 @@ input,textarea{font-family:'Jost',sans-serif}
   .c-head{padding:16px 18px}
   .c-msgs{padding:18px}
   .c-input-bar{padding:14px 16px 18px}
+  .mention-list{left:16px;right:16px;bottom:84px}
   .l-mobile-signout{display:inline-flex}
 }

@@ -21,6 +21,10 @@ const MessageSchema = new mongoose.Schema({
       url: String
     }
   },
+  readBy: [{
+    userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    readAt: { type: Date, default: null }
+  }],
   editedAt: { type: Date, default: null },
   deleted: { type: Boolean, default: false },
   status: { type: String, enum: ['sent','delivered','read'], default: 'sent' }

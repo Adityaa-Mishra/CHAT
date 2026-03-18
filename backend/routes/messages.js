@@ -55,6 +55,7 @@ router.post('/', auth, async (req, res) => {
     type: msgType,
     file: file || null,
     replyTo: replyMeta,
+    readBy: [],
     status: 'sent'
   });
 

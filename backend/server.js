@@ -146,6 +146,7 @@ io.on('connection', async (socket) => {
       type: msgType,
       file: file || null,
       replyTo: replyMeta,
+      readBy: [],
       status
     });
 
@@ -160,6 +161,7 @@ io.on('connection', async (socket) => {
       type: msgType,
       file: file || null,
       replyTo: replyMeta,
+      readBy: [],
       status,
       createdAt: message.createdAt,
       clientId
@@ -183,26 +185,72 @@ io.on('connection', async (socket) => {
     const ok = conv.participants.some(p => p.toString() === userId);
     if(!ok) return;
 
-    const unread = await Message.find({
+    if(!conv.isGroup){
+      const unread = await Message.find({
+        conversationId,
+        sender: { $ne: userId },
+        status: { $ne: 'read' }
+      });
+
+      if(!unread.length) return;
+
+      await Message.updateMany(
+        { _id: { $in: unread.map(m => m._id) } },
+        { $set: { status: 'read' } }
+      );
+
+      unread.forEach(m => {
+        io.to('user:' + m.sender.toString()).emit('message:status', {
+          messageId: m._id,
+          status: 'read',
+          conversationId
+        });
+      });
+      return;
+    }
+
+    const now = new Date();
+    const msgs = await Message.find({
       conversationId,
       sender: { $ne: userId },
-      status: { $ne: 'read' }
+      $or: [
+        { readBy: { $exists: false } },
+        { 'readBy.userId': { $ne: userId } }
+      ]
     });
 
-    if(!unread.length) return;
+    if(!msgs.length) return;
 
-    await Message.updateMany(
-      { _id: { $in: unread.map(m => m._id) } },
-      { $set: { status: 'read' } }
-    );
+    const participants = conv.participants.map(p => p.toString());
 
-    unread.forEach(m => {
-      io.to('user:' + m.sender.toString()).emit('message:status', {
-        messageId: m._id,
-        status: 'read',
-        conversationId
+    for(const msg of msgs){
+      msg.readBy = msg.readBy || [];
+      const hasRead = msg.readBy.some(r => r.userId.toString() === userId);
+      if(!hasRead){
+        msg.readBy.push({ userId, readAt: now });
+      }
+      const others = participants.filter(p => p !== msg.sender.toString());
+      const readIds = msg.readBy.map(r => r.userId.toString());
+      const allRead = others.every(p => readIds.includes(p));
+      if(allRead && msg.status !== 'read'){
+        msg.status = 'read';
+      }
+      await msg.save();
+
+      const payload = { conversationId, messageId: msg._id, readBy: msg.readBy, status: msg.status };
+      io.to('conv:' + conversationId).emit('message:readers', payload);
+      conv.participants.forEach(p => {
+        const rid = p.toString();
+        io.to('user:' + rid).emit('message:readers', payload);
       });
-    });
+      if(msg.status === 'read'){
+        io.to('user:' + msg.sender.toString()).emit('message:status', {
+          messageId: msg._id,
+          status: 'read',
+          conversationId
+        });
+      }
+    }
   });
 
   socket.on('message:edit', async ({ conversationId, messageId, text }) => {

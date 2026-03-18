@@ -178,6 +178,7 @@
         </div>
         <button class="reply-cancel" onclick="clearReply()">x</button>
       </div>
+      <div class="mention-list hidden" id="mention-list"></div>
       <div class="c-input-wrap">
         <label class="c-file-btn" title="Attach file">
           <input type="file" id="c-file" hidden />
@@ -292,6 +293,19 @@
       <div class="g-results" id="gi-results"></div>
     </div>
     <button class="btn btn-ghost w-full" onclick="leaveGroup()" id="gi-leave-btn">Leave Group</button>
+  </div>
+</div>
+
+<!-- MESSAGE INFO MODAL -->
+<div class="modal-backdrop" id="message-info-backdrop" onclick="handleGroupBackdrop(event, 'message-info-backdrop')">
+  <div class="modal">
+    <button class="modal-close" onclick="closeMessageInfo()">x</button>
+    <div class="modal-eyebrow">Message info</div>
+    <h2 class="modal-title">Seen by</h2>
+    <div class="g-section-title">Seen</div>
+    <div class="g-members" id="mi-seen"></div>
+    <div class="g-section-title">Not seen</div>
+    <div class="g-members" id="mi-unseen"></div>
   </div>
 </div>
 <script src="script.js"></script>

@@ -16,6 +16,8 @@ const CONV_KEY = 'cipher_last_conv';
 let actionsMenu = null;
 let replyState = null;
 let groupSelected = new Map();
+let typingByConv = {};
+let mentionState = null;
 
 const el = (id) => document.getElementById(id);
 
@@ -102,6 +104,7 @@ function handleGroupBackdrop(e, id){
   if(e.target === el(id)){
     if(id === 'group-create-backdrop') closeGroupCreateModal();
     if(id === 'group-info-backdrop') closeGroupInfoModal();
+    if(id === 'message-info-backdrop') closeMessageInfo();
   }
 }
 
@@ -310,11 +313,57 @@ async function leaveGroup(){
   }
 }
 
+function closeMessageInfo(){
+  el('message-info-backdrop').classList.remove('open');
+}
+
+function openMessageInfo(msg){
+  const conv = conversations.find(c => c._id === activeConvId);
+  if(!conv || !conv.isGroup) return;
+  const participants = (conv.participants || []).map(p => typeof p === 'string'
+    ? (userMap[p] || { _id: p, username: 'unknown' })
+    : p
+  );
+  const readIds = new Set((msg.readBy || []).map(r => (r.userId || r).toString()));
+  const seen = participants.filter(u => u._id !== msg.sender && readIds.has(u._id));
+  const unseen = participants.filter(u => u._id !== msg.sender && !readIds.has(u._id));
+
+  const seenEl = el('mi-seen');
+  const unseenEl = el('mi-unseen');
+  seenEl.innerHTML = '';
+  unseenEl.innerHTML = '';
+
+  if(!seen.length){
+    seenEl.innerHTML = '<div style="padding:6px 8px;color:var(--ink-4);font-size:0.8rem">No one yet.</div>';
+  }else{
+    seen.forEach(u => {
+      const row = document.createElement('div');
+      row.className = 'g-item';
+      row.textContent = '@' + (u.username || 'unknown');
+      seenEl.appendChild(row);
+    });
+  }
+
+  if(!unseen.length){
+    unseenEl.innerHTML = '<div style="padding:6px 8px;color:var(--ink-4);font-size:0.8rem">Everyone has seen it.</div>';
+  }else{
+    unseen.forEach(u => {
+      const row = document.createElement('div');
+      row.className = 'g-item';
+      row.textContent = '@' + (u.username || 'unknown');
+      unseenEl.appendChild(row);
+    });
+  }
+
+  el('message-info-backdrop').classList.add('open');
+}
+
 document.addEventListener('keydown', e => {
   if(e.key === 'Escape'){
     closeModal();
     closeGroupCreateModal();
     closeGroupInfoModal();
+    closeMessageInfo();
   }
 });
 
@@ -627,6 +676,7 @@ async function openOrCreateConv(userId){
 async function openConversation(convId){
   activeConvId = convId;
   clearReply();
+  hideMentionList();
   try{ localStorage.setItem(CONV_KEY, convId); }catch(_){}
   const conv = conversations.find(c => c._id === convId);
   if(!conv) return;
@@ -743,7 +793,28 @@ function renderMessages(convId){
 function renderTypingIndicator(convId){
   const area = el('c-msgs');
   const conv = conversations.find(c => c._id === convId);
-  const other = conv ? getOtherParticipant(conv) : null;
+  if(!conv) return;
+  if(conv.isGroup){
+    const set = typingByConv[convId] || new Set();
+    const ids = Array.from(set);
+    if(!ids.length) return;
+    const names = ids.map(id => '@' + getUsernameFor(conv, id));
+    const label = names.length === 1
+      ? (names[0] + ' is typing...')
+      : (names.join(', ') + ' are typing...');
+    const wrap = document.createElement('div');
+    wrap.className = 'typing-wrap';
+    wrap.innerHTML = `
+      <div>
+        <div class="typing-label">${esc(label)}</div>
+        <div class="typing-bubble"><span class="typing-dot"></span><span class="typing-dot"></span><span class="typing-dot"></span></div>
+      </div>
+    `;
+    area.appendChild(wrap);
+    return;
+  }
+
+  const other = getOtherParticipant(conv);
   if(!other || !other.isTyping) return;
 
   const wrap = document.createElement('div');
@@ -785,6 +856,61 @@ function setReply(msg){
 function clearReply(){
   replyState = null;
   el('reply-bar').classList.add('hidden');
+}
+
+function hideMentionList(){
+  mentionState = null;
+  el('mention-list').classList.add('hidden');
+  el('mention-list').innerHTML = '';
+}
+
+function updateMentionList(){
+  const conv = conversations.find(c => c._id === activeConvId);
+  if(!conv || !conv.isGroup) return hideMentionList();
+  const text = textarea.value;
+  const cursor = textarea.selectionStart || 0;
+  const before = text.slice(0, cursor);
+  const atIndex = before.lastIndexOf('@');
+  if(atIndex < 0) return hideMentionList();
+  const prevChar = atIndex > 0 ? before[atIndex - 1] : ' ';
+  if(prevChar && !/\s/.test(prevChar)) return hideMentionList();
+  const query = before.slice(atIndex + 1);
+  if(/\s/.test(query)) return hideMentionList();
+  const q = query.toLowerCase();
+  const participants = (conv.participants || []).map(p => typeof p === 'string'
+    ? (userMap[p] || { _id: p, username: 'unknown' })
+    : p
+  ).filter(u => u._id !== currentUser._id);
+  const matches = participants.filter(u => (u.username || '').toLowerCase().includes(q));
+  if(!matches.length) return hideMentionList();
+  mentionState = { start: atIndex, end: cursor, matches };
+  const list = el('mention-list');
+  list.innerHTML = '';
+  matches.forEach(u => {
+    const item = document.createElement('div');
+    item.className = 'mention-item';
+    item.textContent = '@' + (u.username || 'unknown');
+    item.onmousedown = (e) => {
+      e.preventDefault();
+      insertMention(u.username || 'unknown');
+    };
+    list.appendChild(item);
+  });
+  list.classList.remove('hidden');
+}
+
+function insertMention(username){
+  if(!mentionState) return;
+  const text = textarea.value;
+  const before = text.slice(0, mentionState.start);
+  const after = text.slice(mentionState.end);
+  const insert = '@' + username + ' ';
+  const next = before + insert + after;
+  textarea.value = next;
+  const newPos = before.length + insert.length;
+  textarea.setSelectionRange(newPos, newPos);
+  textarea.focus();
+  hideMentionList();
 }
 
 const textarea = el('c-textarea');
@@ -869,10 +995,12 @@ textarea.addEventListener('input', () => {
   textarea.style.height = Math.min(textarea.scrollHeight, 130) + 'px';
   sendBtn.disabled = !textarea.value.trim();
   emitTyping(true);
+  updateMentionList();
 });
 textarea.addEventListener('keydown', e => {
   if(e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); sendMsg(); }
 });
+textarea.addEventListener('blur', () => setTimeout(hideMentionList, 120));
 
 async function sendMsg(){
   const text = textarea.value.trim();
@@ -886,6 +1014,7 @@ async function sendMsg(){
     text,
     type: 'text',
     replyTo,
+    readBy: [],
     status: 'sent',
     createdAt: new Date().toISOString(),
     clientId
@@ -897,6 +1026,7 @@ async function sendMsg(){
   textarea.value = '';
   textarea.style.height = 'auto';
   sendBtn.disabled = true;
+  hideMentionList();
   if(replyState) clearReply();
 
   renderMessages(activeConvId);
@@ -922,6 +1052,7 @@ async function sendFileMessage(fileInfo){
     type: 'file',
     file: fileInfo,
     replyTo,
+    readBy: [],
     status: 'sent',
     createdAt: new Date().toISOString(),
     clientId
@@ -931,6 +1062,7 @@ async function sendFileMessage(fileInfo){
   messagesByConv[activeConvId].push(msg);
   renderMessages(activeConvId);
   updateConversationPreview(activeConvId, msg);
+  hideMentionList();
   if(replyState) clearReply();
 
   if(socket && socket.connected){
@@ -1044,9 +1176,27 @@ function connectSocket(){
     if(activeConvId === conversationId){ renderMessages(conversationId); }
   });
 
+  socket.on('message:readers', ({ messageId, conversationId, readBy, status }) => {
+    const msgs = messagesByConv[conversationId] || [];
+    const msg = msgs.find(m => m._id === messageId);
+    if(msg){
+      msg.readBy = readBy || msg.readBy || [];
+      if(status) msg.status = status;
+    }
+    if(activeConvId === conversationId){ renderMessages(conversationId); }
+  });
+
   socket.on('typing:update', ({ conversationId, userId, isTyping }) => {
     const conv = conversations.find(c => c._id === conversationId);
     if(!conv) return;
+    if(conv.isGroup){
+      if(userId === currentUser._id) return;
+      if(!typingByConv[conversationId]) typingByConv[conversationId] = new Set();
+      if(isTyping) typingByConv[conversationId].add(userId);
+      else typingByConv[conversationId].delete(userId);
+      if(activeConvId === conversationId){ renderMessages(conversationId); }
+      return;
+    }
     const other = getOtherParticipant(conv);
     if(!other || other._id !== userId) return;
     other.isTyping = isTyping;
@@ -1214,6 +1364,7 @@ function showMessageActions(msg, x, y){
     actionsMenu = document.createElement('div');
     actionsMenu.className = 'msg-actions';
     actionsMenu.innerHTML = `
+      <button id="msg-info">Info</button>
       <button id="msg-edit">Edit</button>
       <button id="msg-delete" class="danger">Delete</button>
     `;
@@ -1239,6 +1390,15 @@ function showMessageActions(msg, x, y){
 
   const editBtn = actionsMenu.querySelector('#msg-edit');
   const delBtn  = actionsMenu.querySelector('#msg-delete');
+  const infoBtn = actionsMenu.querySelector('#msg-info');
+
+  const conv = conversations.find(c => c._id === activeConvId);
+  const showInfo = !!conv && conv.isGroup;
+  infoBtn.style.display = showInfo ? 'block' : 'none';
+  infoBtn.onclick = () => {
+    hideMessageActions();
+    openMessageInfo(msg);
+  };
 
   editBtn.onclick = async () => {
     hideMessageActions();
