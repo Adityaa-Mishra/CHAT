@@ -647,6 +647,10 @@ input,textarea{font-family:'Jost',sans-serif}
   color:var(--ink-3);
   cursor:pointer;
 }
+.msg-reply.dm{
+  border-left:none;
+  padding-left:0;
+}
 .msg-reply strong{color:var(--ink)}
 .msg-highlight .msg-bubble{
   box-shadow:0 0 0 2px rgba(139,111,71,0.35);

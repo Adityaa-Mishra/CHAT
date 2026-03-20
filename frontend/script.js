@@ -763,7 +763,7 @@ function renderMessages(convId){
     const fileUrl = m.file?.url ? (m.file.url.startsWith('/') ? (API_BASE + m.file.url) : m.file.url) : '#';
     const senderName = '@' + getUsernameFor(conv, m.sender);
     const senderLabel = (!isSent && isGroup) ? '<div class="msg-sender">' + esc(senderName) + '</div>' : '';
-    const replyLabel = (isGroup && m.replyTo) ? renderReplyPreview(m.replyTo, conv, isGroup) : '';
+    const replyLabel = m.replyTo ? renderReplyPreview(m.replyTo, conv, isGroup) : '';
     const content = m.type === 'file'
       ? `<a href="${fileUrl}" target="_blank" rel="noopener">${esc(m.file?.name || 'File')}</a>`
       : (m.deleted ? 'Message deleted' : esc(m.text || ''));
@@ -783,6 +783,14 @@ function renderMessages(convId){
         ${showStatus ? `<span class="msg-status ${statusClass(m.status)}">${statusLabel}</span>` : ''}
       </div>
     `;
+    const rb = wrap.querySelector('.msg-reply-trigger');
+    if(rb){
+      rb.onclick = (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        setReply(m);
+      };
+    }
     area.appendChild(wrap);
   });
 
@@ -830,7 +838,8 @@ function renderReplyPreview(reply, conv, isGroup){
     : (reply.text || 'Message');
   const msgId = reply.messageId ? reply.messageId.toString() : '';
   const namePart = isGroup ? `<strong>${esc(senderName)}</strong> ` : '';
-  return `<div class="msg-reply" data-reply-id="${msgId}">${namePart}${esc(body)}</div>`;
+  const cls = isGroup ? 'msg-reply' : 'msg-reply dm';
+  return `<div class="${cls}" data-reply-id="${msgId}">${namePart}${esc(body)}</div>`;
 }
 
 function setReply(msg){
