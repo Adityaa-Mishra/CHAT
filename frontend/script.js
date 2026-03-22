@@ -2,7 +2,7 @@
 const API_BASE =
   (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1")
     ? "http://127.0.0.1:5000"
-    : "https://chat-7jt6.onrender.com";
+    : "https://rizchat-g4s4.onrender.com";
 
 let currentUser = null;
 let conversations = [];
